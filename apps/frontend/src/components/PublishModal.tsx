@@ -13,7 +13,8 @@ interface PublishModalProps {
   onClose: () => void;
   hasBackedUp: boolean;
   onDownloadBackup: () => void;
-  newHtml: string; // Ci serve l'HTML per copiarlo qui
+  newHtml: string;
+  onInvalidateCache: () => void;
 }
 
 export default function PublishModal({
@@ -22,6 +23,7 @@ export default function PublishModal({
   hasBackedUp,
   onDownloadBackup,
   newHtml,
+  onInvalidateCache,
 }: PublishModalProps) {
   const [copied, setCopied] = useState(false);
 
@@ -41,6 +43,10 @@ export default function PublishModal({
     try {
       await navigator.clipboard.writeText(newHtml);
       setCopied(true);
+
+      // Svuota la cache in background senza far accorgere nulla all'utente
+      onInvalidateCache();
+
       window.open(DRUPAL_URL, '_blank');
       onClose();
     } catch (err) {

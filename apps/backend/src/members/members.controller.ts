@@ -25,7 +25,7 @@ if (!existsSync(uploadDir)) {
 
 // Multer config for images
 const storage = diskStorage({
-  destination: uploadDir, // <-- CAMBIATO: fuori da public
+  destination: uploadDir,
   filename: (_req, file, cb) => {
     // Keep original name for consistency with Drupal upload logic
     cb(null, file.originalname);
@@ -107,7 +107,7 @@ export class MembersController {
     // Construct file objects pointing to the local disk
     const filesToUpload = filenames.map((name) => ({
       originalname: name,
-      path: join(process.cwd(), 'uploads', name), // <-- CAMBIATO: punta a /uploads
+      path: join(process.cwd(), 'uploads', name),
     }));
 
     // Reuse the logic!

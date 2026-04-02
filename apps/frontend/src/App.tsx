@@ -6,6 +6,7 @@ import {
   FileDown,
   RefreshCw,
   ShieldAlert,
+  Zap,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import DiffViewer from './components/DiffViewer';
@@ -151,6 +152,39 @@ export default function App() {
       if (!confirmDiscard) return;
     }
     startStreaming();
+  };
+
+  // --- NUOVA FUNZIONE: Pulisce la cache e fa il refresh ---
+  const handleClearCacheAndRefresh = async () => {
+    if (sections) {
+      const confirmDiscard = window.confirm(
+        'Attenzione: perderei le modifiche locali non salvate. Vuoi SVUOTARE LA CACHE del server e forzare il download dei dati freschi dal sito?',
+      );
+      if (!confirmDiscard) return;
+    }
+
+    setLoading(true);
+    try {
+      await fetch('/v1/cache/content', { method: 'DELETE' });
+      // Riavvia lo streaming (che ora troverà la cache vuota)
+      startStreaming();
+    } catch (e) {
+      console.error('Errore durante lo svuotamento della cache:', e);
+      alert('Impossibile svuotare la cache');
+      setLoading(false);
+    }
+  };
+
+  // --- NUOVA FUNZIONE: Pulisce la cache silenziosamente (per post-pubblicazione) ---
+  const handleSilentCacheClear = async () => {
+    try {
+      await fetch('/v1/cache/content', { method: 'DELETE' });
+    } catch (e) {
+      console.error(
+        'Errore nello svuotamento della cache post-pubblicazione:',
+        e,
+      );
+    }
   };
 
   // Modified function to switch to Preview Mode
@@ -385,6 +419,20 @@ export default function App() {
 
           {view === 'edit' && (
             <>
+              {/* --- NUOVO PULSANTE FULMINE --- */}
+              <button
+                type="button"
+                onClick={handleClearCacheAndRefresh}
+                disabled={isStreaming || loading}
+                className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-lg px-3.5 py-2 flex items-center gap-2 font-semibold text-sm cursor-pointer transition-all shadow-sm"
+                title="Ignora la cache, scarica la versione attuale forzatamente"
+              >
+                <Zap
+                  size={16}
+                  className={`${isStreaming ? 'animate-pulse' : ''}`}
+                />
+              </button>
+
               <button
                 type="button"
                 onClick={handleRefreshFromLive}
@@ -602,6 +650,7 @@ export default function App() {
         hasBackedUp={hasBackedUp}
         onDownloadBackup={handleDownloadOld}
         newHtml={previewData?.newHtml || ''}
+        onInvalidateCache={handleSilentCacheClear} // <-- AGGIUNGI QUI
       />
 
       {editModal && (
