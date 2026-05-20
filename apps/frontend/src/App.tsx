@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowUpDown,
   CheckCircle,
   ExternalLink,
   FileDown,
@@ -152,6 +153,17 @@ export default function App() {
       if (!confirmDiscard) return;
     }
     startStreaming();
+  };
+
+  const handleSortMembers = () => {
+    if (!sections) return;
+    const next: SectionsState = { ...sections };
+    for (const key of SECTION_KEYS) {
+      next[key] = [...sections[key]].sort((a, b) =>
+        a.name.localeCompare(b.name, 'it', { sensitivity: 'base' }),
+      );
+    }
+    setSections(next);
   };
 
   // --- NUOVA FUNZIONE: Pulisce la cache e fa il refresh ---
@@ -419,6 +431,17 @@ export default function App() {
 
           {view === 'edit' && (
             <>
+              <button
+                type="button"
+                onClick={handleSortMembers}
+                disabled={isStreaming || loading}
+                className="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg px-3.5 py-2 flex items-center gap-2 font-semibold text-sm cursor-pointer transition-all"
+                title="Ordina alfabeticamente i membri in ogni sezione"
+              >
+                <ArrowUpDown size={16} className="text-gray-400" />
+                <span>Ordina A-Z</span>
+              </button>
+
               {/* --- NUOVO PULSANTE FULMINE --- */}
               <button
                 type="button"
