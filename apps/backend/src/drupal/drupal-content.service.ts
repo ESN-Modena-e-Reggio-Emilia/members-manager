@@ -22,15 +22,21 @@ export class DrupalContentService {
     onLog?: (msg: string) => void,
     retry = true,
   ): Promise<string> {
+    this.logger.debug('getAboutUsContent called');
     // 0. Check Cache First
     const cachedContent = await this.cacheService.get<string>(this.CACHE_KEY);
     if (cachedContent !== null) {
+      this.logger.debug(
+        `Content found in cache (length: ${cachedContent.length})`,
+      );
       onLog?.('Content retrieved from cache.');
       return cachedContent;
     }
+    this.logger.debug('Content not in cache');
 
     // Prevent thundering herd: if a fetch is already in progress, wait for it
     if (this.fetchPromise) {
+      this.logger.debug('Fetch already in progress, waiting...');
       onLog?.(
         'Content fetch already in progress, waiting for ongoing request...',
       );
@@ -38,6 +44,7 @@ export class DrupalContentService {
     }
 
     // Start the fetch and store the promise to prevent concurrent requests
+    this.logger.debug('Starting new content fetch');
     onLog?.('Content not in cache, starting fetch...');
     this.fetchPromise = this.performFetch(onLog, retry).finally(() => {
       this.fetchPromise = null;
@@ -54,6 +61,7 @@ export class DrupalContentService {
     const cookie = await this.authService.getSessionCookie(onLog);
 
     try {
+      this.logger.debug('Starting fetch request to Drupal');
       onLog?.('Fetching content via Axios...');
 
       // 2. Make the HTTP Request
@@ -67,10 +75,14 @@ export class DrupalContentService {
           },
         }),
       );
+      this.logger.debug(
+        `HTTP response received (status: ${response.status}, data length: ${(response.data as string).length})`,
+      );
 
       // 3. Parse HTML with Cheerio
       onLog?.('Parsing content with Cheerio...');
       const $ = cheerio.load(response.data as string);
+      this.logger.debug('HTML parsed with Cheerio');
 
       // Select the textarea and get its value
       const content = $('#edit-body-und-0-value').val(); // .val() for inputs/textareas
@@ -79,14 +91,24 @@ export class DrupalContentService {
         this.logger.warn('Textarea not found. Cookie might be invalid.');
         throw new UnauthorizedException('Content not found');
       }
+      this.logger.debug(
+        `Content extracted from textarea (length: ${content.length})`,
+      );
 
       // Store in cache
       await this.cacheService.set(this.CACHE_KEY, content, this.CACHE_TTL);
+      this.logger.debug('Content cached successfully');
       onLog?.('Content retrieved successfully and cached.');
       return content;
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.debug(`Fetch error: ${errorMessage}`);
       // 4. Retry Logic: If Axios gets a 403/401, the cookie might be stale.
       if (retry) {
+        this.logger.debug(
+          'Clearing cache and retrying (no more retries after this)',
+        );
         this.logger.warn('Request failed. Invalidating cache and retrying...');
         // Clear the cache to force a fresh fetch on retry
         await this.cacheService.delete(this.CACHE_KEY);
@@ -94,6 +116,7 @@ export class DrupalContentService {
         // Ideally: await this.authService.invalidateCache();
         return this.performFetch(onLog, false);
       }
+      this.logger.debug('Max retries reached, throwing error');
       throw error;
     }
   }

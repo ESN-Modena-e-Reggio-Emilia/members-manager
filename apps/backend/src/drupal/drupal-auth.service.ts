@@ -42,20 +42,25 @@ export class DrupalAuthService implements OnModuleInit {
    * concurrent requests need to refresh the token.
    */
   async getSessionCookie(onLog?: (msg: string) => void): Promise<string> {
+    this.logger.debug('getSessionCookie called');
     // Check cache first
     const cachedCookie = await this.cacheService.get<string>(this.CACHE_KEY);
     if (cachedCookie !== null) {
+      this.logger.debug('Session cookie found in cache');
       onLog?.('Using cached session cookie.');
       return cachedCookie;
     }
+    this.logger.debug('Session cookie not in cache or expired');
 
     // If a refresh is already in progress, wait for it instead of starting a new one
     if (this.refreshPromise) {
+      this.logger.debug('Refresh already in progress, waiting...');
       onLog?.('Login already in progress, waiting for ongoing refresh...');
       return this.refreshPromise;
     }
 
     // Start the refresh and store the promise to prevent concurrent refreshes
+    this.logger.debug('Starting new session refresh');
     onLog?.('Cookie missing or expired. Starting Puppeteer login...');
     this.refreshPromise = this.performPuppeteerLogin(onLog)
       .then((cookie) => {
@@ -117,19 +122,25 @@ export class DrupalAuthService implements OnModuleInit {
 
       // --- EXTRACT COOKIES ---
       const cookies = await page.cookies();
+      this.logger.debug(`Extracted ${cookies.length} cookies from page`);
 
       // Convert Puppeteer cookie objects to a standard "key=value; " header string
       const cookieString = cookies
         .map((c) => `${c.name}=${c.value}`)
         .join('; ');
+      this.logger.debug(
+        `Cookie string created (length: ${cookieString.length})`,
+      );
 
       return cookieString;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+      this.logger.debug(`Login error: ${errorMessage}`);
       onLog?.(`Error: ${errorMessage}`);
       throw error;
     } finally {
+      this.logger.debug('Closing browser');
       await browser.close();
     }
   }
