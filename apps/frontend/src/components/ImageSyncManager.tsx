@@ -20,6 +20,14 @@ export default function ImageSyncManager({
   toDelete,
   onUploadSuccess,
 }: ImageSyncManagerProps) {
+  const dataUrlSize = (dataUrl: string) => {
+    const base64 = dataUrl.split(',')[1] ?? '';
+    const bytes = Math.round((base64.length * 3) / 4);
+    return bytes < 1024 * 1024
+      ? `${(bytes / 1024).toFixed(0)} KB`
+      : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<null | {
     success: number;
@@ -132,6 +140,9 @@ export default function ImageSyncManager({
                 />
                 <span className="text-sm font-medium text-gray-700 truncate flex-1">
                   {img.filename}
+                </span>
+                <span className="text-xs text-gray-400 shrink-0">
+                  {dataUrlSize(img.dataUrl)}
                 </span>
                 <a
                   href={img.dataUrl}
