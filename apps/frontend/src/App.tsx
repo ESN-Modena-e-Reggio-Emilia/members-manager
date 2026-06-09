@@ -10,6 +10,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import BulkImportModal from './components/BulkImportModal';
 import DiffViewer from './components/DiffViewer';
 import ImageSyncManager from './components/ImageSyncManager';
 import MemberModal from './components/MemberModal';
@@ -48,6 +49,7 @@ export default function App() {
     section: SectionType;
     index: number | null;
   } | null>(null);
+  const [bulkModal, setBulkModal] = useState<SectionType | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
 
   // Drag state
@@ -333,6 +335,14 @@ export default function App() {
     setEditModal(null);
   }
 
+  function handleBulkSave(section: SectionType, newMembers: MemberData[]) {
+    if (!sections) return;
+    const next = { ...sections };
+    next[section] = [...next[section], ...newMembers];
+    setSections(next);
+    setBulkModal(null);
+  }
+
   function handleDelete(section: SectionType, index: number) {
     if (!sections) return;
     const next = { ...sections };
@@ -533,6 +543,9 @@ export default function App() {
                   members={sections[key]}
                   onEdit={(i) => setEditModal({ section: key, index: i })}
                   onAddNew={() => setEditModal({ section: key, index: null })}
+                  onBulkImport={
+                    key === 'ACTIVE' ? () => setBulkModal(key) : undefined
+                  }
                   onDragStart={(i) => handleDragStart(key, i)}
                   onDropOnCard={(ti) => handleDropOnCard(key, ti)}
                   onDropOnSection={() => handleDropOnSection(key)}
@@ -687,6 +700,14 @@ export default function App() {
           onDelete={() =>
             modalIndex !== null && handleDelete(editModal.section, modalIndex)
           }
+        />
+      )}
+
+      {bulkModal && (
+        <BulkImportModal
+          sectionKey={bulkModal}
+          onSave={(newMembers) => handleBulkSave(bulkModal, newMembers)}
+          onClose={() => setBulkModal(null)}
         />
       )}
     </div>

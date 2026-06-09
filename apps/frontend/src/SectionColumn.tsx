@@ -1,3 +1,4 @@
+import { Users } from 'lucide-react';
 import { useState } from 'react';
 import { SECTION_COLORS, SECTION_LABELS } from './constants';
 import MemberCard from './MemberCard';
@@ -8,6 +9,7 @@ interface SectionColumnProps {
   members: MemberData[];
   onEdit: (idx: number) => void;
   onAddNew: () => void;
+  onBulkImport?: () => void;
   onDragStart: (memberIdx: number) => void;
   onDropOnCard: (targetIdx: number) => void;
   onDropOnSection: () => void;
@@ -19,6 +21,7 @@ const SectionColumn = ({
   members,
   onEdit,
   onAddNew,
+  onBulkImport,
   onDragStart,
   onDropOnCard,
   onDropOnSection,
@@ -52,15 +55,28 @@ const SectionColumn = ({
             {members.length} {members.length === 1 ? 'membro' : 'membri'}
           </div>
         </div>
-        <button
-          type="button"
-          className="bg-none border-2 border-dashed rounded-md w-7 h-7 cursor-pointer font-bold text-base flex items-center justify-center leading-none"
-          style={{ color, borderColor: color }}
-          onClick={onAddNew}
-          title="Aggiungi membro"
-        >
-          ＋
-        </button>
+        <div className="flex items-center gap-1.5">
+          {onBulkImport && (
+            <button
+              type="button"
+              className="bg-none border-2 border-dashed rounded-md w-7 h-7 cursor-pointer flex items-center justify-center leading-none"
+              style={{ color, borderColor: color }}
+              onClick={onBulkImport}
+              title="Import multiplo"
+            >
+              <Users size={14} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="bg-none border-2 border-dashed rounded-md w-7 h-7 cursor-pointer font-bold text-base flex items-center justify-center leading-none"
+            style={{ color, borderColor: color }}
+            onClick={onAddNew}
+            title="Aggiungi membro"
+          >
+            ＋
+          </button>
+        </div>
       </div>
 
       <div
