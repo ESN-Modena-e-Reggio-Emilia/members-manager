@@ -22,10 +22,15 @@ const MemberModal = ({
   onClose,
   onDelete,
 }: ModalProps) => {
+  const isNewMember = !member?.name;
   const [name, setName] = useState(member?.name ?? '');
-  const [role, setRole] = useState(member?.role ?? '');
+  const [role, setRole] = useState(
+    member?.role ??
+      (isNewMember && sectionKey === 'ACTIVE' ? 'Membro Attivo' : ''),
+  );
   const [imageFilename, setImageFilename] = useState(
-    member?.imageFilename ?? '',
+    member?.imageFilename ??
+      (isNewMember && sectionKey === 'ACTIVE' ? 'esn_logo.jpg' : ''),
   );
   const [localImage, setLocalImage] = useState(member?.localImage ?? '');
   const [uploading, setUploading] = useState(false);
@@ -40,7 +45,7 @@ const MemberModal = ({
     y: number;
   } | null>(null);
   const color = SECTION_COLORS[sectionKey];
-  const isNew = !member?.name;
+  const isNew = isNewMember;
 
   // Define the drop handler
   const onDrop = useCallback((acceptedFiles: File[]) => {
