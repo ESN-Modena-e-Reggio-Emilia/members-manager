@@ -47,8 +47,10 @@ export default function ImageSyncManager({
         form.append('photos', blob, img.filename);
       }
 
-      // Hit the standard upload endpoint!
-      const res = await fetch('/v1/members/upload', {
+      // Hit the replace endpoint: it deletes any existing copy first, then
+      // re-uploads, so Drupal keeps the exact filename instead of appending
+      // a "_0" suffix. New files (no existing copy) are uploaded fresh.
+      const res = await fetch('/v1/members/replace', {
         method: 'POST',
         body: form,
       });

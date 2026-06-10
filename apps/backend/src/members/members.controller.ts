@@ -121,6 +121,46 @@ export class MembersController {
     return { results };
   }
 
+  // Triggers the Puppeteer delete for specific files in the members folder
+  @Post('delete-images')
+  async deleteImages(@Body() body: { filenames: string[] }) {
+    const { filenames } = body;
+    if (!filenames || filenames.length === 0)
+      return { message: 'No files to delete' };
+
+    const results = await this.drupalImageService.deleteImages(
+      filenames,
+      (msg) => {
+        this.logger.log(`[Delete] ${msg}`);
+      },
+    );
+
+    return { results };
+  }
+
+  // Deletes the existing copy (if any) then re-uploads, in one browser session.
+  // Files are read from the local uploads/ dir, like deploy-images.
+  @Post('replace-images')
+  async replaceImages(@Body() body: { filenames: string[] }) {
+    const { filenames } = body;
+    if (!filenames || filenames.length === 0)
+      return { message: 'No files to replace' };
+
+    const filesToReplace = filenames.map((name) => ({
+      originalname: name,
+      path: join(process.cwd(), 'uploads', name),
+    }));
+
+    const results = await this.drupalImageService.replaceImages(
+      filesToReplace,
+      (msg) => {
+        this.logger.log(`[Replace] ${msg}`);
+      },
+    );
+
+    return { results };
+  }
+
   // 3. Image Upload
   @Post('upload')
   @UseInterceptors(FilesInterceptor('photos', 10, { storage })) // Allow up to 10 files
@@ -146,6 +186,38 @@ export class MembersController {
 
     return {
       message: 'Upload process completed',
+      results,
+    };
+  }
+
+  // 4. Image Replace (multipart): deletes any existing copy then re-uploads.
+  // Safe to use for new files too — the delete step is skipped if none exists,
+  // so this avoids Drupal's "_0" suffix on same-name re-uploads.
+  @Post('replace')
+  @UseInterceptors(FilesInterceptor('photos', 10, { storage }))
+  async replaceFiles(@UploadedFiles() files: Array<Express.Multer.File>) {
+    if (!files || files.length === 0) {
+      return { message: 'No files provided' };
+    }
+
+    const results = await this.drupalImageService.replaceImages(
+      files,
+      (msg) => {
+        this.logger.log(`[Replace Job] ${msg}`);
+      },
+    );
+
+    // Clean up: delete uploaded files after processing
+    for (const file of files) {
+      try {
+        await unlink(file.path);
+      } catch (err) {
+        this.logger.warn(`Failed to delete ${file.path}:`, err);
+      }
+    }
+
+    return {
+      message: 'Replace process completed',
       results,
     };
   }
