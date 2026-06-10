@@ -1,10 +1,37 @@
 import { Controller, MessageEvent, Sse } from '@nestjs/common';
 import { Observable, Subject } from 'rxjs';
+import { DrupalAuthService } from './drupal-auth.service';
 import { DrupalContentService } from './drupal-content.service';
 
 @Controller('drupal')
 export class DrupalController {
-  constructor(private readonly drupalContentService: DrupalContentService) {}
+  constructor(
+    private readonly drupalContentService: DrupalContentService,
+    private readonly drupalAuthService: DrupalAuthService,
+  ) {}
+
+  @Sse('clear-cache')
+  clearCache(): Observable<MessageEvent> {
+    const subject = new Subject<MessageEvent>();
+
+    void (async () => {
+      try {
+        await this.drupalAuthService.clearDrupalSiteCache((msg) => {
+          subject.next({ data: { type: 'log', message: msg } });
+        });
+
+        subject.next({ data: { type: 'done' } });
+        subject.complete();
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Unknown error';
+        subject.next({ data: { type: 'error', message: errorMessage } });
+        subject.complete();
+      }
+    })();
+
+    return subject.asObservable();
+  }
 
   @Sse('stream-about-us')
   streamAboutUs(): Observable<MessageEvent> {

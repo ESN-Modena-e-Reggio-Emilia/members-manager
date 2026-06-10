@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer';
 import { CacheService } from '../cache/cache.service';
 
 @Injectable()
@@ -78,6 +78,45 @@ export class DrupalAuthService implements OnModuleInit {
   private async performPuppeteerLogin(
     onLog?: (msg: string) => void,
   ): Promise<string> {
+    const { browser, page } = await this.launchAndLogin(onLog);
+
+    try {
+      onLog?.('Login successful! Extracting cookies...');
+
+      // --- EXTRACT COOKIES ---
+      const cookies = await page.cookies();
+      this.logger.debug(`Extracted ${cookies.length} cookies from page`);
+
+      // Convert Puppeteer cookie objects to a standard "key=value; " header string
+      const cookieString = cookies
+        .map((c) => `${c.name}=${c.value}`)
+        .join('; ');
+      this.logger.debug(
+        `Cookie string created (length: ${cookieString.length})`,
+      );
+
+      return cookieString;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.debug(`Login error: ${errorMessage}`);
+      onLog?.(`Error: ${errorMessage}`);
+      throw error;
+    } finally {
+      this.logger.debug('Closing browser');
+      await browser.close();
+    }
+  }
+
+  /**
+   * Launches a Puppeteer browser, performs the login flow and returns the
+   * authenticated browser/page so callers can keep interacting with the site
+   * (e.g. submit admin forms). The caller is responsible for closing the
+   * browser.
+   */
+  private async launchAndLogin(
+    onLog?: (msg: string) => void,
+  ): Promise<{ browser: Browser; page: Page }> {
     onLog?.('Launching browser...');
     const browser = await puppeteer.launch({
       // Headless in production, non-headless in dev for easier debugging
@@ -118,25 +157,43 @@ export class DrupalAuthService implements OnModuleInit {
         page.click('#edit-submit'),
       ]);
 
-      onLog?.('Login successful! Extracting cookies...');
+      return { browser, page };
+    } catch (error) {
+      // Make sure we don't leak a browser if login fails before we hand it off
+      await browser.close();
+      throw error;
+    }
+  }
 
-      // --- EXTRACT COOKIES ---
-      const cookies = await page.cookies();
-      this.logger.debug(`Extracted ${cookies.length} cookies from page`);
+  /**
+   * Logs into Drupal and clicks "Clear all caches" on the performance
+   * settings page. This flushes the Drupal site cache so freshly saved
+   * content becomes visible on the public website.
+   */
+  async clearDrupalSiteCache(onLog?: (msg: string) => void): Promise<void> {
+    this.logger.debug('clearDrupalSiteCache called');
+    const { browser, page } = await this.launchAndLogin(onLog);
 
-      // Convert Puppeteer cookie objects to a standard "key=value; " header string
-      const cookieString = cookies
-        .map((c) => `${c.name}=${c.value}`)
-        .join('; ');
-      this.logger.debug(
-        `Cookie string created (length: ${cookieString.length})`,
+    try {
+      onLog?.('Navigating to performance settings...');
+      await page.goto(
+        'https://more.esn.it/?q=admin/config/development/performance',
+        { waitUntil: 'networkidle2' },
       );
 
-      return cookieString;
+      onLog?.('Clicking "Clear all caches"...');
+      await page.waitForSelector('#edit-clear');
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle2' }),
+        page.click('#edit-clear'),
+      ]);
+
+      this.logger.log('Drupal site cache cleared successfully');
+      onLog?.('Drupal site cache cleared successfully!');
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      this.logger.debug(`Login error: ${errorMessage}`);
+      this.logger.debug(`Clear cache error: ${errorMessage}`);
       onLog?.(`Error: ${errorMessage}`);
       throw error;
     } finally {

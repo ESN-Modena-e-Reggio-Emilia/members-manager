@@ -201,6 +201,32 @@ export default function App() {
     }
   };
 
+  // --- Svuota la cache del SITO Drupal (login + click "Clear all caches") ---
+  // Apre uno stream SSE e inoltra i log live al modal tramite onLog.
+  const handleClearDrupalCache = (onLog: (msg: string) => void) =>
+    new Promise<void>((resolve, reject) => {
+      const eventSource = new EventSource('/v1/drupal/clear-cache');
+
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'log') {
+          onLog(data.message);
+        } else if (data.type === 'done') {
+          eventSource.close();
+          resolve();
+        } else if (data.type === 'error') {
+          eventSource.close();
+          reject(new Error(data.message));
+        }
+      };
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        reject(new Error('Connessione allo stream persa.'));
+      };
+    });
+
   // Modified function to switch to Preview Mode
   const handleGoToPreview = async () => {
     if (!sections) return;
@@ -686,7 +712,8 @@ export default function App() {
         hasBackedUp={hasBackedUp}
         onDownloadBackup={handleDownloadOld}
         newHtml={previewData?.newHtml || ''}
-        onInvalidateCache={handleSilentCacheClear} // <-- AGGIUNGI QUI
+        onInvalidateCache={handleSilentCacheClear}
+        onClearDrupalCache={handleClearDrupalCache}
       />
 
       {editModal && (
