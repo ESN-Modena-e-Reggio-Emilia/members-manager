@@ -11,13 +11,15 @@ import {
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import Cropper from 'react-easy-crop';
-import { ROLE_SUGGESTIONS, SECTION_BG, SECTION_COLORS } from '../constants';
+import {
+  ROLE_SUGGESTIONS,
+  SECTION_BG,
+  SECTION_COLORS,
+  SECTION_NEW_MEMBER_DEFAULTS,
+} from '../constants';
 import { getCroppedImg } from '../cropUtils';
 import type { MemberData, SectionType } from '../types';
 import { imgUrl, initials } from '../utils';
-
-const DEFAULT_ROLE = 'Membro Attivo';
-const DEFAULT_IMAGE = 'esn_logo.jpg';
 
 interface BulkImportModalProps {
   sectionKey: SectionType;
@@ -47,6 +49,9 @@ const BulkImportModal = ({
   onClose,
 }: BulkImportModalProps) => {
   const color = SECTION_COLORS[sectionKey];
+  const DEFAULT_ROLE = SECTION_NEW_MEMBER_DEFAULTS[sectionKey]?.role ?? '';
+  const DEFAULT_IMAGE =
+    SECTION_NEW_MEMBER_DEFAULTS[sectionKey]?.imageFilename ?? 'esn_logo.jpg';
   const [step, setStep] = useState<'input' | 'review'>('input');
   const [rawText, setRawText] = useState('');
   const [rows, setRows] = useState<MemberData[]>([]);

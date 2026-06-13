@@ -16,7 +16,11 @@ import ImageSyncManager from './components/ImageSyncManager';
 import MemberModal from './components/MemberModal';
 import PublishModal from './components/PublishModal';
 import WelcomeModal from './components/WelcomeModal';
-import { SECTION_COLORS, SECTION_KEYS } from './constants';
+import {
+  BULK_IMPORT_SECTIONS,
+  SECTION_COLORS,
+  SECTION_KEYS,
+} from './constants';
 import SectionColumn from './SectionColumn';
 import type { MemberData, SectionsState, SectionType } from './types';
 import { parseDrupalHtml } from './utils';
@@ -570,7 +574,9 @@ export default function App() {
                   onEdit={(i) => setEditModal({ section: key, index: i })}
                   onAddNew={() => setEditModal({ section: key, index: null })}
                   onBulkImport={
-                    key === 'ACTIVE' ? () => setBulkModal(key) : undefined
+                    BULK_IMPORT_SECTIONS.includes(key)
+                      ? () => setBulkModal(key)
+                      : undefined
                   }
                   onDragStart={(i) => handleDragStart(key, i)}
                   onDropOnCard={(ti) => handleDropOnCard(key, ti)}

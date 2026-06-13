@@ -2,7 +2,12 @@ import { Camera, Check, RefreshCw, X, ZoomIn, ZoomOut } from 'lucide-react'; // 
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Cropper from 'react-easy-crop';
-import { ROLE_SUGGESTIONS, SECTION_BG, SECTION_COLORS } from '../constants';
+import {
+  ROLE_SUGGESTIONS,
+  SECTION_BG,
+  SECTION_COLORS,
+  SECTION_NEW_MEMBER_DEFAULTS,
+} from '../constants';
 import { getCroppedImg } from '../cropUtils';
 import type { MemberData, SectionType } from '../types';
 import { imgUrl, initials } from '../utils';
@@ -23,14 +28,13 @@ const MemberModal = ({
   onDelete,
 }: ModalProps) => {
   const isNewMember = !member?.name;
+  const sectionDefaults = isNewMember
+    ? SECTION_NEW_MEMBER_DEFAULTS[sectionKey]
+    : undefined;
   const [name, setName] = useState(member?.name ?? '');
-  const [role, setRole] = useState(
-    member?.role ??
-      (isNewMember && sectionKey === 'ACTIVE' ? 'Membro Attivo' : ''),
-  );
+  const [role, setRole] = useState(member?.role ?? sectionDefaults?.role ?? '');
   const [imageFilename, setImageFilename] = useState(
-    member?.imageFilename ??
-      (isNewMember && sectionKey === 'ACTIVE' ? 'esn_logo.jpg' : ''),
+    member?.imageFilename ?? sectionDefaults?.imageFilename ?? '',
   );
   const [localImage, setLocalImage] = useState(member?.localImage ?? '');
   const [uploading, setUploading] = useState(false);

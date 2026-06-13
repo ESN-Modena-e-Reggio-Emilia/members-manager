@@ -32,6 +32,17 @@ export const SECTION_KEYS: SectionType[] = [
   'ALUMNI',
 ];
 
+// Valori di default per i nuovi membri, per sezione
+export const SECTION_NEW_MEMBER_DEFAULTS: Partial<
+  Record<SectionType, { role: string; imageFilename: string }>
+> = {
+  ACTIVE: { role: 'Membro Attivo', imageFilename: 'esn_logo.jpg' },
+  ALUMNI: { role: 'Alumno', imageFilename: 'esn_logo.jpg' },
+};
+
+// Sezioni che supportano l'import multiplo
+export const BULK_IMPORT_SECTIONS: SectionType[] = ['ACTIVE', 'ALUMNI'];
+
 export const ROLE_SUGGESTIONS = [
   'Presidente',
   'Vicepresidente',
