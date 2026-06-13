@@ -34,11 +34,11 @@ const SECTIONS = {
     badgeText: 'Mascotte',
   },
   ALUMNI: {
-    ariaLabel: 'Alumni Network',
+    ariaLabel: 'Alumni Network', // NON cambiare: serve a riconoscere la sezione
     color: '#6c757d', // Grigio
     rgba: 'rgba(108, 117, 125, 0.18)',
     rgbaShadow: 'rgba(108, 117, 125, 0.35)',
-    badgeText: 'Alumni Network',
+    badgeText: 'Alumni Member',
   },
 } as const;
 
