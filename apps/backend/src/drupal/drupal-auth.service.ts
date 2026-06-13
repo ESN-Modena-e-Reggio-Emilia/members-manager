@@ -109,6 +109,20 @@ export class DrupalAuthService implements OnModuleInit {
   }
 
   /**
+   * Public entry point for other services (e.g. publishing) that need an
+   * authenticated browser/page to interact with admin forms. Performs a fresh
+   * login each time to avoid stale form tokens / build ids on write
+   * operations. The caller is responsible for closing the browser
+   * (`browser.close()` in a `finally`).
+   */
+  async getAuthenticatedSession(
+    onLog?: (msg: string) => void,
+    destination?: string,
+  ): Promise<{ browser: Browser; page: Page }> {
+    return this.launchAndLogin(onLog, destination);
+  }
+
+  /**
    * Launches a Puppeteer browser, performs the login flow and returns the
    * authenticated browser/page so callers can keep interacting with the site
    * (e.g. submit admin forms). The caller is responsible for closing the
@@ -116,6 +130,7 @@ export class DrupalAuthService implements OnModuleInit {
    */
   private async launchAndLogin(
     onLog?: (msg: string) => void,
+    destination?: string,
   ): Promise<{ browser: Browser; page: Page }> {
     onLog?.('Launching browser...');
     const browser = await puppeteer.launch({
@@ -130,8 +145,13 @@ export class DrupalAuthService implements OnModuleInit {
       await page.setViewport({ width: 1280, height: 800 });
 
       // --- YOUR LOGIN LOGIC HERE ---
+      // A destination makes Drupal redirect straight there after login,
+      // avoiding a wasteful hop through the site front page.
+      const loginUrl = destination
+        ? `https://more.esn.it/?q=user/login&destination=${encodeURIComponent(destination)}`
+        : 'https://more.esn.it/?q=user/login';
       onLog?.('Navigating to login page...');
-      await page.goto('https://more.esn.it/?q=user/login', {
+      await page.goto(loginUrl, {
         waitUntil: 'networkidle2',
       });
 

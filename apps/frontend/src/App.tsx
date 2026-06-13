@@ -2,17 +2,17 @@ import {
   AlertTriangle,
   ArrowRight,
   ArrowUpDown,
-  CheckCircle,
   ExternalLink,
-  FileDown,
   RefreshCw,
-  ShieldAlert,
+  Rocket,
+  ShieldCheck,
   Zap,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import BulkImportModal from './components/BulkImportModal';
 import DiffViewer from './components/DiffViewer';
 import ImageSyncManager from './components/ImageSyncManager';
+import ImageUploadPromptModal from './components/ImageUploadPromptModal';
 import MemberModal from './components/MemberModal';
 import PublishModal from './components/PublishModal';
 import WelcomeModal from './components/WelcomeModal';
@@ -35,6 +35,13 @@ interface PreviewData {
   };
 }
 
+interface PublishResult {
+  verified: boolean;
+  driftDetected: boolean;
+  firstBackup: boolean;
+  commitSha: string | null;
+}
+
 export default function App() {
   const [sections, setSections] = useState<SectionsState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +51,6 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [view, setView] = useState<'edit' | 'preview'>('edit');
   const [previewData, setPreviewData] = useState<PreviewData | null>(null); // New State
-  const [hasBackedUp, setHasBackedUp] = useState(false);
   const [imagesUploadedPendingSave, setImagesUploadedPendingSave] =
     useState(false);
 
@@ -55,6 +61,21 @@ export default function App() {
   } | null>(null);
   const [bulkModal, setBulkModal] = useState<SectionType | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showImagePrompt, setShowImagePrompt] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+
+  // New images selected locally but not yet uploaded to Drupal.
+  const pendingImages = sections
+    ? Object.values(sections)
+        .flat()
+        .filter(
+          (
+            m,
+          ): m is MemberData & { localImage: string; imageFilename: string } =>
+            Boolean(m.localImage && m.imageFilename),
+        )
+        .map((m) => ({ filename: m.imageFilename, dataUrl: m.localImage }))
+    : [];
 
   // Drag state
   const dragSource = useRef<{ section: SectionType; index: number } | null>(
@@ -122,25 +143,66 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [imagesUploadedPendingSave]);
 
-  async function handleSave() {
+  function handleSave() {
     if (!sections || !previewData) return;
 
-    setSaving(true);
-    // setSaveMsg(''); // Non serve più mostrare messaggi qui
+    // Se ci sono nuove immagini non ancora caricate su Drupal, chiedi prima
+    // se caricarle (altrimenti i membri le mostrerebbero rotte).
+    if (pendingImages.length > 0 && !imagesUploadedPendingSave) {
+      setShowImagePrompt(true);
+      return;
+    }
 
+    void proceedToPublish();
+  }
+
+  // Carica le immagini locali ancora mancanti su Drupal (replace endpoint).
+  const uploadPendingImages = async () => {
+    if (pendingImages.length === 0) return;
+    setUploadingImages(true);
     try {
-      // 1. Salviamo sul backend locale (opzionale ma utile)
+      const form = new FormData();
+      for (const img of pendingImages) {
+        const res = await fetch(img.dataUrl);
+        const blob = await res.blob();
+        form.append('photos', blob, img.filename);
+      }
+      const res = await fetch('/v1/members/replace', {
+        method: 'POST',
+        body: form,
+      });
+      const data = await res.json();
+      const successCount = data.results.filter(
+        (r: { status: string }) => r.status === 'success',
+      ).length;
+      if (successCount > 0) setImagesUploadedPendingSave(true);
+      if (successCount < pendingImages.length) {
+        alert(
+          `Alcune immagini non sono state caricate (${pendingImages.length - successCount} fallite). Puoi riprovare o pubblicare comunque.`,
+        );
+      }
+    } catch (err) {
+      console.error('Errore durante il caricamento delle immagini:', err);
+      alert('Errore durante il caricamento delle immagini.');
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  // Salva lo stato locale sul backend e apre il modal di pubblicazione.
+  const proceedToPublish = async () => {
+    if (!sections || !previewData) return;
+    setSaving(true);
+    try {
+      // Salviamo sul backend locale (opzionale ma utile)
       const res = await fetch(`/v1/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sections),
       });
-
       if (!res.ok) console.warn('Warning: Salvataggio locale fallito');
 
       setImagesUploadedPendingSave(false);
-
-      // 2. Apriamo il Modal (che gestirà backup check e redirect)
       setShowPublishModal(true);
     } catch (err) {
       console.error(err);
@@ -148,7 +210,20 @@ export default function App() {
     } finally {
       setSaving(false);
     }
-  }
+  };
+
+  // Dal modal immagini: carica e poi prosegui alla pubblicazione.
+  const handleUploadAndContinue = async () => {
+    await uploadPendingImages();
+    setShowImagePrompt(false);
+    void proceedToPublish();
+  };
+
+  // Dal modal immagini: salta il caricamento e pubblica direttamente.
+  const handleSkipAndPublish = () => {
+    setShowImagePrompt(false);
+    void proceedToPublish();
+  };
 
   const handleRefreshFromLive = () => {
     // Se abbiamo già dei dati (sections non è null), chiediamo conferma
@@ -193,23 +268,22 @@ export default function App() {
     }
   };
 
-  // --- NUOVA FUNZIONE: Pulisce la cache silenziosamente (per post-pubblicazione) ---
-  const handleSilentCacheClear = async () => {
-    try {
-      await fetch('/v1/cache/content', { method: 'DELETE' });
-    } catch (e) {
-      console.error(
-        'Errore nello svuotamento della cache post-pubblicazione:',
-        e,
-      );
-    }
-  };
+  // --- Pubblicazione automatica end-to-end ---
+  // Prepara il payload (POST), poi apre uno stream SSE che esegue tutta la
+  // pipeline lato server (snapshot di backup su GitHub -> salvataggio su
+  // Drupal con verifica -> commit della nuova versione) inoltrando i log live.
+  const handlePublish = async (onLog: (msg: string) => void) => {
+    const prep = await fetch('/v1/members/prepare-publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newHtml: previewData?.newHtml || '' }),
+    });
+    if (!prep.ok) throw new Error('Impossibile preparare la pubblicazione.');
+    const { jobId, error } = await prep.json();
+    if (!jobId) throw new Error(error || 'jobId mancante.');
 
-  // --- Svuota la cache del SITO Drupal (login + click "Clear all caches") ---
-  // Apre uno stream SSE e inoltra i log live al modal tramite onLog.
-  const handleClearDrupalCache = (onLog: (msg: string) => void) =>
-    new Promise<void>((resolve, reject) => {
-      const eventSource = new EventSource('/v1/drupal/clear-cache');
+    return new Promise<PublishResult>((resolve, reject) => {
+      const eventSource = new EventSource(`/v1/members/publish/${jobId}`);
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -218,7 +292,7 @@ export default function App() {
           onLog(data.message);
         } else if (data.type === 'done') {
           eventSource.close();
-          resolve();
+          resolve(data.result as PublishResult);
         } else if (data.type === 'error') {
           eventSource.close();
           reject(new Error(data.message));
@@ -230,12 +304,12 @@ export default function App() {
         reject(new Error('Connessione allo stream persa.'));
       };
     });
+  };
 
   // Modified function to switch to Preview Mode
   const handleGoToPreview = async () => {
     if (!sections) return;
     setLoading(true);
-    setHasBackedUp(false);
     try {
       const res = await fetch(`/v1/members`, {
         method: 'POST',
@@ -270,7 +344,6 @@ export default function App() {
     if (!previewData) return;
     const date = new Date().toISOString().split('T')[0];
     downloadHtmlFile(`backup_esn_members_${date}.html`, previewData.oldHtml);
-    setHasBackedUp(true);
   };
 
   // const handleDownloadNew = () => {
@@ -606,65 +679,38 @@ export default function App() {
                   </div>
                 </div>
               )}
-              {/* --- ZONA DI SICUREZZA / DOWNLOAD --- */}
-              <div className="bg-orange-50 border-l-4 border-orange-500 rounded-r-xl p-6 shadow-sm mb-2">
+              {/* --- INFO BACKUP AUTOMATICO --- */}
+              <div className="bg-green-50 border-l-4 border-green-500 rounded-r-xl p-6 shadow-sm mb-2">
                 <div className="flex items-start gap-4">
-                  <div className="p-2 bg-orange-100 rounded-full text-orange-600 shrink-0">
-                    <ShieldAlert size={32} />
+                  <div className="p-2 bg-green-100 rounded-full text-green-600 shrink-0">
+                    <ShieldCheck size={32} />
                   </div>
                   <div className="flex-1">
                     <h2 className="text-lg font-bold text-gray-900 mb-1">
-                      Backup
+                      Backup automatico
                     </h2>
-                    <p className="text-gray-700 text-sm mb-4 leading-relaxed">
-                      Prima di caricare qualsiasi cosa su Drupal/Satellite,{' '}
-                      <strong>DEVI scaricare il backup</strong> dell'HTML
-                      attuale. Se qualcosa va storto, senza questo file sono
-                      cazzi per ripristinare il sito.
-                    </p>
-
-                    <div className="flex flex-wrap gap-4 items-center">
-                      {/* Tasto 1: Scarica Vecchio (Backup) */}
+                    <p className="text-gray-700 text-sm leading-relaxed">
+                      Non devi più scaricare nulla a mano: quando pubblichi,
+                      salvo la versione attuale su GitHub come backup, pubblico
+                      l'HTML nuovo su Drupal e verifico il risultato. Se vuoi un
+                      backup locale puoi comunque{' '}
                       <button
                         type="button"
                         onClick={handleDownloadOld}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm cursor-pointer transition-all shadow-sm ${
-                          hasBackedUp
-                            ? 'bg-green-100 text-green-700 border border-green-200'
-                            : 'bg-orange-600 hover:bg-orange-700 text-white'
-                        }`}
+                        className="text-green-700 font-bold underline hover:text-green-900 transition-colors cursor-pointer"
                       >
-                        {hasBackedUp ? (
-                          <CheckCircle size={18} />
-                        ) : (
-                          <FileDown size={18} />
-                        )}
-                        {hasBackedUp
-                          ? 'Backup scaricato'
-                          : 'SCARICA BACKUP (Obbligatorio)'}
+                        scaricarlo qui
                       </button>
-                    </div>
+                      .
+                    </p>
                   </div>
                 </div>
               </div>
-              {/* --- FINE ZONA DI SICUREZZA --- */}
+              {/* --- FINE INFO BACKUP --- */}
 
               {/* 1. Image Management Section */}
               <ImageSyncManager
-                localImages={Object.values(sections || {})
-                  .flat()
-                  .filter(
-                    (
-                      m,
-                    ): m is MemberData & {
-                      localImage: string;
-                      imageFilename: string;
-                    } => Boolean(m.localImage && m.imageFilename),
-                  )
-                  .map((m) => ({
-                    filename: m.imageFilename,
-                    dataUrl: m.localImage,
-                  }))}
+                localImages={pendingImages}
                 toDelete={previewData.images.toDelete}
                 onUploadSuccess={() => setImagesUploadedPendingSave(true)}
               />
@@ -687,21 +733,14 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 3. Final Warning */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-yellow-800 text-sm flex gap-3 items-start mt-4">
-                <AlertTriangle className="shrink-0 mt-0.5" />
+              {/* 3. Final Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-blue-800 text-sm flex gap-3 items-start mt-4">
+                <Rocket className="shrink-0 mt-0.5" />
                 <div>
-                  <strong>Attenzione:</strong> Il salvataggio finale non è
-                  automatico.{' '}
-                  <a
-                    href="https://more.esn.it/?q=node/104/edit"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-yellow-700 font-bold underline hover:text-yellow-900 transition-colors"
-                  >
-                    Vai qui
-                  </a>{' '}
-                  per modificare l'HTML con quello nuovo!!!
+                  <strong>Tutto pronto.</strong> Premi{' '}
+                  <strong>Conferma e pubblica</strong> in alto: ci penso io a
+                  salvare su Drupal e a fare il backup su GitHub. Non serve più
+                  copiare l'HTML a mano.
                 </div>
               </div>
             </div>
@@ -711,15 +750,23 @@ export default function App() {
         </main>
       )}
 
+      {/* Modal: chiede se caricare le nuove immagini prima di pubblicare */}
+      <ImageUploadPromptModal
+        isOpen={showImagePrompt}
+        imageCount={pendingImages.length}
+        uploading={uploadingImages}
+        onUploadAndContinue={handleUploadAndContinue}
+        onSkipAndPublish={handleSkipAndPublish}
+        onClose={() => setShowImagePrompt(false)}
+      />
+
       {/* Modal */}
       <PublishModal
         isOpen={showPublishModal}
         onClose={() => setShowPublishModal(false)}
-        hasBackedUp={hasBackedUp}
-        onDownloadBackup={handleDownloadOld}
         newHtml={previewData?.newHtml || ''}
-        onInvalidateCache={handleSilentCacheClear}
-        onClearDrupalCache={handleClearDrupalCache}
+        onPublish={handlePublish}
+        onDownloadBackup={handleDownloadOld}
       />
 
       {editModal && (
