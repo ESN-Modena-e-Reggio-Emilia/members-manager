@@ -12,7 +12,7 @@ export function parseDrupalHtml(html: string): SectionsState {
     { key: 'SUPPORTERS' as SectionType, search: 'Board Supporters' },
     { key: 'ACTIVE' as SectionType, search: 'Active Members' },
     { key: 'MASCOTS' as SectionType, search: 'Mascots' },
-    { key: 'ALUMNI' as SectionType, search: 'Alumni Network' },
+    { key: 'ALUMNI' as SectionType, search: 'Alumni Member' },
   ];
 
   sectionsConfig.forEach(({ key, search }) => {

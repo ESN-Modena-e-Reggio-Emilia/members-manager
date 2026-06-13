@@ -5,7 +5,7 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   SUPPORTERS: 'Board Supporters',
   ACTIVE: 'Active Members',
   MASCOTS: 'Mascotte',
-  ALUMNI: 'Alumni Network',
+  ALUMNI: 'Alumni Member',
 };
 
 export const SECTION_COLORS: Record<SectionType, string> = {
