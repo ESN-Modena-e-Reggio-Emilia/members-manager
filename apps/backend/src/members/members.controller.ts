@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -6,16 +7,25 @@ import {
   Controller,
   Get,
   Logger,
+  MessageEvent,
+  Param,
   Post,
+  Sse,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import { Observable, Subject } from 'rxjs';
+import { CacheService } from '../cache/cache.service';
 import { DrupalContentService } from '../drupal/drupal-content.service';
 import { DrupalImageService } from '../drupal/drupal-image.service';
 import { MemberData } from './esn-page-manager';
 import { MembersService } from './members.service';
+
+// Short-lived storage for a prepared publish payload (the large newHtml can't
+// travel in an EventSource GET, so we stash it and stream by job id).
+const PUBLISH_JOB_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Assicuriamoci che la cartella esista all'avvio del file (opzionale ma utile)
 const uploadDir = './uploads';
@@ -40,7 +50,65 @@ export class MembersController {
     private readonly membersService: MembersService,
     private readonly drupalService: DrupalContentService,
     private readonly drupalImageService: DrupalImageService,
+    private readonly cacheService: CacheService,
   ) {}
+
+  // Stores the prepared HTML and returns a job id to stream the publish from.
+  @Post('prepare-publish')
+  async preparePublish(@Body() body: { newHtml: string }) {
+    if (!body?.newHtml) {
+      return { error: 'newHtml is required' };
+    }
+    const jobId = randomUUID();
+    await this.cacheService.set(
+      `publish_job:${jobId}`,
+      body.newHtml,
+      PUBLISH_JOB_TTL,
+    );
+    return { jobId };
+  }
+
+  // Streams the full publish pipeline (drift snapshot -> Drupal save -> GitHub
+  // commit) as SSE log/done/error events, same shape as DrupalController.
+  @Sse('publish/:jobId')
+  publish(@Param('jobId') jobId: string): Observable<MessageEvent> {
+    const subject = new Subject<MessageEvent>();
+
+    void (async () => {
+      try {
+        const newHtml = await this.cacheService.get<string>(
+          `publish_job:${jobId}`,
+        );
+        if (!newHtml) {
+          subject.next({
+            data: {
+              type: 'error',
+              message:
+                'Sessione di pubblicazione scaduta o non trovata. Riprova.',
+            },
+          });
+          subject.complete();
+          return;
+        }
+
+        const result = await this.membersService.publishAndBackup(
+          newHtml,
+          (msg) => subject.next({ data: { type: 'log', message: msg } }),
+        );
+
+        await this.cacheService.delete(`publish_job:${jobId}`);
+        subject.next({ data: { type: 'done', result } });
+        subject.complete();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        this.logger.error(`Publish failed: ${message}`);
+        subject.next({ data: { type: 'error', message } });
+        subject.complete();
+      }
+    })();
+
+    return subject.asObservable();
+  }
 
   // 1. Scrape Drupal -> Parse -> Return JSON
   @Get()

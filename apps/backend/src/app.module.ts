@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CacheModule } from './cache/cache.module';
 import { DrupalModule } from './drupal/drupal.module';
+import { GithubModule } from './github/github.module';
 import { MembersModule } from './members/members.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { MembersModule } from './members/members.module';
     }),
     MembersModule,
     CacheModule,
+    GithubModule,
   ],
   controllers: [AppController],
   providers: [AppService],

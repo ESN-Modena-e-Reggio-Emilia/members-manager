@@ -8,7 +8,9 @@ import { DrupalAuthService } from './drupal-auth.service';
 @Injectable()
 export class DrupalContentService {
   private readonly logger = new Logger(DrupalContentService.name);
-  private readonly CACHE_KEY = 'drupal_about_us_content';
+  // Public so other services (e.g. publishing) can invalidate the same entry.
+  static readonly CACHE_KEY = 'drupal_about_us_content';
+  private readonly CACHE_KEY = DrupalContentService.CACHE_KEY;
   private readonly CACHE_TTL = 3600000; // 1 hour in milliseconds
   private fetchPromise: Promise<string> | null = null;
 
@@ -47,6 +49,29 @@ export class DrupalContentService {
     this.logger.debug('Starting new content fetch');
     onLog?.('Content not in cache, starting fetch...');
     this.fetchPromise = this.performFetch(onLog, retry).finally(() => {
+      this.fetchPromise = null;
+    });
+
+    return this.fetchPromise;
+  }
+
+  /**
+   * Fetches the about-us content directly from Drupal, bypassing the cache.
+   * Used right before publishing so the "drift snapshot" reflects the true
+   * live state and not a possibly-stale cached copy. Reuses the same
+   * thundering-herd lock as the cached path.
+   */
+  async getAboutUsContentFresh(onLog?: (msg: string) => void): Promise<string> {
+    this.logger.debug('getAboutUsContentFresh called (cache bypassed)');
+    onLog?.('Fetching live content from Drupal (bypassing cache)...');
+
+    if (this.fetchPromise) {
+      this.logger.debug('Fetch already in progress, waiting...');
+      onLog?.('Content fetch already in progress, waiting...');
+      return this.fetchPromise;
+    }
+
+    this.fetchPromise = this.performFetch(onLog, true).finally(() => {
       this.fetchPromise = null;
     });
 
