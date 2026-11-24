@@ -99,7 +99,8 @@ const SectionColumn = ({
           // Removed <Masonry> and used standard map
           members.map((member, index) => (
             <MemberCard
-              key={`${member.name}-${index}`} // Add a key
+              // biome-ignore lint/suspicious/noArrayIndexKey: names may repeat; index disambiguates
+              key={`${member.name}-${index}`}
               member={member}
               sectionKey={sectionKey}
               index={index}

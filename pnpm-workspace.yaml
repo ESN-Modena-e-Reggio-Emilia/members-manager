@@ -2,7 +2,7 @@ packages:
   - apps/*
 
 onlyBuiltDependencies:
-  - '@nestjs/core'
-  - '@swc/core'
+  - "@nestjs/core"
+  - "@swc/core"
   - esbuild
   - puppeteer

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { DrupalModule } from 'src/drupal/drupal.module';
-import { GithubModule } from 'src/github/github.module';
 import { CacheModule } from '../cache/cache.module';
+import { DrupalModule } from '../drupal/drupal.module';
+import { GithubModule } from '../github/github.module';
 import { MembersController } from './members.controller';
 import { MembersService } from './members.service';
 

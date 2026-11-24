@@ -8,8 +8,8 @@ export class DrupalAuthService implements OnModuleInit {
   private readonly logger = new Logger(DrupalAuthService.name);
   private readonly CACHE_KEY = 'drupal_session_cookie';
   private readonly CACHE_TTL = 1000 * 60 * 60 * 2; // 2 hours in milliseconds
-  private drupalUsername: string;
-  private drupalPassword: string;
+  private drupalUsername!: string;
+  private drupalPassword!: string;
   private refreshPromise: Promise<string> | null = null;
 
   constructor(

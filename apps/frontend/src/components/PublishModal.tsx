@@ -89,6 +89,7 @@ export default function PublishModal({
   const logBox = logs.length > 0 && (
     <div className="bg-gray-900 text-green-400 text-left text-xs font-mono rounded-xl p-3 mb-4 max-h-40 overflow-y-auto">
       {logs.map((msg, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: append-only log, messages may repeat
         <div key={`${i}-${msg}`}>
           <span className="text-gray-500">&gt;</span> {msg}
         </div>
